@@ -52,16 +52,19 @@ import java_cup.runtime.Symbol;
  *  one of those states, place your code in the switch statement.
  *  Ultimately, you should return the EOF symbol, or your lexer won't
  *  work.  */
-
+    String errMsg = null;
     switch(yy_lexical_state) {
     case YYINITIAL:
 	/* nothing special to do in the initial state */
-	break;
-	/* If necessary, add code for other states here, e.g:
-	   case COMMENT:
-	   ...
-	   break;
-	*/
+	    break;
+    case COMMENT:
+        errMsg = "LEXER BUG - EOF in comment, file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
+        System.err.println(errMsg);
+        return new Symbol(TokenConstants.ERROR, errMsg);
+    case STRING:
+        errMsg = "LEXER BUG - EOF in string, file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
+        System.err.println(errMsg);
+        return new Symbol(TokenConstants.ERROR, errMsg);
     }
     return new Symbol(TokenConstants.EOF);
 %eofval}
@@ -112,16 +115,38 @@ CL_STRING  = [\"]
 <YYINITIAL>({WHITE_SPACE}|{NEWLINE})+ { }
 <YYINITIAL>"{" { return new Symbol(TokenConstants.LBRACE); }
 <YYINITIAL>"}" { return new Symbol(TokenConstants.RBRACE); }
+<YYINITIAL>"*" { return new Symbol(TokenConstants.MULT); }
+<YYINITIAL>"(" { return new Symbol(TokenConstants.LPAREN); }
+<YYINITIAL>")" { return new Symbol(TokenConstants.RPAREN); }
+<YYINITIAL>";" { return new Symbol(TokenConstants.SEMI); }
+<YYINITIAL>"-" { return new Symbol(TokenConstants.MINUS); }
+<YYINITIAL>"-" { return new Symbol(TokenConstants.NEG); }
+<YYINITIAL>"<" { return new Symbol(TokenConstants.LT); }
+<YYINITIAL>"," { return new Symbol(TokenConstants.COMMA); }
+<YYINITIAL>"/" { return new Symbol(TokenConstants.DIV); }
+<YYINITIAL>"+" { return new Symbol(TokenConstants.PLUS); }
+<YYINITIAL>"<-" { return new Symbol(TokenConstants.ASSIGN); }
+<YYINITIAL>"." { return new Symbol(TokenConstants.DOT); }
+<YYINITIAL>"<=" { return new Symbol(TokenConstants.LE); }
+<YYINITIAL>"=" { return new Symbol(TokenConstants.EQ); }
+<YYINITIAL>":" { return new Symbol(TokenConstants.COLON); }
+<YYINITIAL>"@" { return new Symbol(TokenConstants.AT); }
 <YYINITIAL>"=>" { return new Symbol(TokenConstants.DARROW); }
-<YYINITIAL> {OBJECT_ID} { }
-<YYINITIAL> {TYPE_ID}  { }
 
-.                               { /* This rule should be the very last
-                                     in your lexical specification and
-                                     will match match everything not
-                                     matched by other lexical rules. */
-                                  String errMsg = "LEXER BUG - UNMATCHED file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
-                                  System.err.println(errMsg);
-                                  return new Symbol(TokenConstants.ERROR, errMsg);
-                                }
+<YYINITIAL> {OBJECT_ID} { 
+            String objectStr = yytext(); 
+            if (objectStr.toLowerCase().equals("true"))
+                return new Symbol(TokenConstants.BOOL_CONST, true);
+            else if (objectStr.toLowerCase().equals("false"))
+                return new Symbol(TokenConstants.BOOL_CONST, false);
+            return new Symbol(TokenConstants.OBJECTID, AbstractTable.idtable.addString(objectStr));
+            }
+
+<YYINITIAL> {TYPE_ID}  { return new Symbol(TokenConstants.TYPEID, AbstractTable.idtable.addString(yytext()))}
+
+.   {
+        String errMsg = "LEXER BUG - UNMATCHED file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
+        System.err.println(errMsg);
+        return new Symbol(TokenConstants.ERROR, errMsg);
+    }
 
