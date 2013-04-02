@@ -80,7 +80,7 @@ ALPHA = [a-zA-Z]+
 
 ID = [a-z]({DIGIT}|{ALPHA}|_)*
 
-WHITE_SPACE = [\t\b\ ]
+WHITE_SPACE = [\f\v\t\r\ ]
 NEWLINE = [\n]
 
 COMMENT_LINE = [-][-][^\n]*{NEWLINE}
@@ -88,10 +88,11 @@ OP_COMMENT = "(*"
 CL_COMMENT = "*)"
 %state COMMENT
 
-STRING_CONST = [^\"^\n]*
+STRING_CONST = [^\"^\n^\\]*
 OP_STRING  = [\"]
 CL_STRING  = [\"]
 %state STRING
+%state STRING_BACK_SLASH
 
 %%
 
@@ -151,26 +152,56 @@ CL_STRING  = [\"]
                 yybegin(STRING);
             }
 
+<STRING>    \\ {
+                yybegin(STRING_BACK_SLASH); 
+            }
+
+<STRING_BACK_SLASH> . {
+                char c = yytext().charAt(0);
+                switch (c) {
+                    case 'b':
+                        c = '\b';
+                        break;
+                    case 't':
+                        c = '\t';
+                        break;
+                    case 'n':
+                        c = '\n';
+                        break;
+                    case 'f':
+                        c= '\f';
+                        break;
+                    case '0':
+                        c= '\0';
+                        break;
+                    default:
+                        break;
+                }
+
+                string_buf.append(c);
+                yybegin(STRING);
+            }
+
 <STRING>    {CL_STRING} { 
                 yybegin(YYINITIAL);
                 String str = string_buf.toString();
                 string_buf = new StringBuffer();
+                if (str.length()  > MAX_STR_CONST) {
+                    return new Symbol(TokenConstants.ERROR, "String constant too long");
+                }
                 return new Symbol(TokenConstants.STR_CONST, AbstractTable.stringtable.addString(str));
             }
 
+<STRING, STRING_BACK_SLASH> {NEWLINE} {
+                yybegin(YYINITIAL);
+                string_buf = new StringBuffer();
+                return new Symbol(TokenConstants.ERROR, "Unterminated string constant");
+            }
+
 <STRING>    {STRING_CONST} {
-                String str = yytext().replaceAll("\\n", "\n");
-                if (str.length() + string_buf.length() > MAX_STR_CONST) {
-                    errMsg = "LEXER BUG - String length overflow\n \"" + curr_filename() + "\", line " + yyline + ": " + yytext();
-                    System.out.println(errMsg);
-                    return new Symbol(TokenConstants.ERROR, errMsg);
-                }
+                String str = yytext();
                 string_buf.append(str);
             } 
-
-<STRING>   {NEWLINE} {}
-
-
 
 <YYINITIAL> {DIGIT} {
                 return new Symbol(TokenConstants.INT_CONST, AbstractTable.inttable.addString(yytext()));
