@@ -113,6 +113,8 @@ CL_STRING  = [\"]
 <YYINITIAL>"{" { return new Symbol(TokenConstants.LBRACE); }
 <YYINITIAL>"}" { return new Symbol(TokenConstants.RBRACE); }
 <YYINITIAL>"=>" { return new Symbol(TokenConstants.DARROW); }
+<YYINITIAL> {OBJECT_ID} { }
+<YYINITIAL> {TYPE_ID}  { }
 
 .                               { /* This rule should be the very last
                                      in your lexical specification and
@@ -123,5 +125,3 @@ CL_STRING  = [\"]
                                   return new Symbol(TokenConstants.ERROR, errMsg);
                                 }
 
-<YYINITIAL> {OBJECT_ID} { }
-<YYINITIAL> {TYPE_ID}  { }
