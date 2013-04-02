@@ -21,6 +21,7 @@ import java_cup.runtime.Symbol;
 
     private int curr_lineno = 1;
     private int comment_depth = 0;
+    private String errMsg = null;
     int get_curr_lineno() {
 	return curr_lineno;
     }
@@ -54,9 +55,8 @@ import java_cup.runtime.Symbol;
  *  Ultimately, you should return the EOF symbol, or your lexer won't
  *  work.  */
     String errMsg = null;
-    switch(yy_lexical_state) {
+/*    switch(yy_lexical_state) {
     case YYINITIAL:
-	/* nothing special to do in the initial state */
 	    break;
     case COMMENT:
         errMsg = "LEXER BUG - EOF in comment, file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
@@ -66,7 +66,7 @@ import java_cup.runtime.Symbol;
         errMsg = "LEXER BUG - EOF in string, file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
         System.err.println(errMsg);
         return new Symbol(TokenConstants.ERROR, errMsg);
-    }
+    } */
     return new Symbol(TokenConstants.EOF);
 %eofval}
 
@@ -78,17 +78,17 @@ import java_cup.runtime.Symbol;
 DIGIT = [0-9]+
 ALPHA = [a-zA-Z]+
 
-ID = [a-z]({DIGIT}|{ALPHA}|_)+
+ID = [a-z]({DIGIT}|{ALPHA}|_)*
 
 WHITE_SPACE = [\t\b\ ]
-NEWLINE = [\r\n]
+NEWLINE = [\n]
 
-COMMENT_LINE = [\-][\-][^{NEWLINE}]*{NEWLINE}
+COMMENT_LINE = [-][-][^\n]*{NEWLINE}
 OP_COMMENT = "(*"
 CL_COMMENT = "*)"
 %state COMMENT
 
-STRING_CONST = [^\"]*
+STRING_CONST = [^\"^\n]*
 OP_STRING  = [\"]
 CL_STRING  = [\"]
 %state STRING
@@ -113,7 +113,6 @@ CL_STRING  = [\"]
 <YYINITIAL>"of" { return new Symbol(TokenConstants.OF); }
 <YYINITIAL>"not" { return new Symbol(TokenConstants.NOT); }
 
-<YYINITIAL>({WHITE_SPACE}|{NEWLINE})+ { }
 <YYINITIAL>"{" { return new Symbol(TokenConstants.LBRACE); }
 <YYINITIAL>"}" { return new Symbol(TokenConstants.RBRACE); }
 <YYINITIAL>"*" { return new Symbol(TokenConstants.MULT); }
@@ -134,6 +133,8 @@ CL_STRING  = [\"]
 <YYINITIAL>"@" { return new Symbol(TokenConstants.AT); }
 <YYINITIAL>"=>" { return new Symbol(TokenConstants.DARROW); }
 
+<YYINITIAL, COMMENT>({WHITE_SPACE}|{NEWLINE})+ { }
+
 <YYINITIAL> {ID} { 
             String objectStr = yytext(); 
             if (objectStr.toLowerCase().equals("true"))
@@ -152,18 +153,32 @@ CL_STRING  = [\"]
 
 <STRING>    {CL_STRING} { 
                 yybegin(YYINITIAL);
+                String str = string_buf.toString();
+                string_buf = new StringBuffer();
+                return new Symbol(TokenConstants.STR_CONST, AbstractTable.stringtable.addString(str));
             }
 
 <STRING>    {STRING_CONST} {
-                String str = yytext(); 
-                return new Symbol(TokenConstants.STR_CONST, AbstractTable.stringtable.addString(str));
+                String str = yytext().replaceAll("\\n", "\n");
+                if (str.length() + string_buf.length() > MAX_STR_CONST) {
+                    errMsg = "LEXER BUG - String length overflow\n \"" + curr_filename() + "\", line " + yyline + ": " + yytext();
+                    System.out.println(errMsg);
+                    return new Symbol(TokenConstants.ERROR, errMsg);
+                }
+                string_buf.append(str);
             } 
+
+<STRING>   {NEWLINE} {}
+
+
 
 <YYINITIAL> {DIGIT} {
                 return new Symbol(TokenConstants.INT_CONST, AbstractTable.inttable.addString(yytext()));
             }
 
-<YYINITIAL, COMMENT> {OP_COMMENT} {
+<YYINITIAL> {COMMENT_LINE} {}
+
+<YYINITIAL,COMMENT> {OP_COMMENT} {
                 comment_depth ++;
                 yybegin(COMMENT);
             }
@@ -177,7 +192,7 @@ CL_STRING  = [\"]
 <COMMENT>   .  { }
 
 .   {
-        String errMsg = "LEXER BUG - UNMATCHED file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
+        errMsg = "LEXER BUG - UNMATCHED file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
         System.err.println(errMsg);
         return new Symbol(TokenConstants.ERROR, errMsg);
     }
