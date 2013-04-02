@@ -20,6 +20,7 @@ import java_cup.runtime.Symbol;
     StringBuffer string_buf = new StringBuffer();
 
     private int curr_lineno = 1;
+    private int comment_depth = 0;
     int get_curr_lineno() {
 	return curr_lineno;
     }
@@ -77,8 +78,7 @@ import java_cup.runtime.Symbol;
 DIGIT = [0-9]+
 ALPHA = [a-zA-Z]+
 
-OBJECT_ID = [a-z]({DIGIT}|{ALPHA}|_)+
-TYPE_ID = [A-Z]({DIGIT}|{ALPHA}|_)+
+ID = [a-z]({DIGIT}|{ALPHA}|_)+
 
 WHITE_SPACE = [\t\b\ ]
 NEWLINE = [\r\n]
@@ -88,6 +88,7 @@ OP_COMMENT = "(*"
 CL_COMMENT = "*)"
 %state COMMENT
 
+STRING_CONST = [^\"]*
 OP_STRING  = [\"]
 CL_STRING  = [\"]
 %state STRING
@@ -120,7 +121,7 @@ CL_STRING  = [\"]
 <YYINITIAL>")" { return new Symbol(TokenConstants.RPAREN); }
 <YYINITIAL>";" { return new Symbol(TokenConstants.SEMI); }
 <YYINITIAL>"-" { return new Symbol(TokenConstants.MINUS); }
-<YYINITIAL>"-" { return new Symbol(TokenConstants.NEG); }
+<YYINITIAL>"~" { return new Symbol(TokenConstants.NEG); }
 <YYINITIAL>"<" { return new Symbol(TokenConstants.LT); }
 <YYINITIAL>"," { return new Symbol(TokenConstants.COMMA); }
 <YYINITIAL>"/" { return new Symbol(TokenConstants.DIV); }
@@ -133,16 +134,47 @@ CL_STRING  = [\"]
 <YYINITIAL>"@" { return new Symbol(TokenConstants.AT); }
 <YYINITIAL>"=>" { return new Symbol(TokenConstants.DARROW); }
 
-<YYINITIAL> {OBJECT_ID} { 
+<YYINITIAL> {ID} { 
             String objectStr = yytext(); 
             if (objectStr.toLowerCase().equals("true"))
                 return new Symbol(TokenConstants.BOOL_CONST, true);
             else if (objectStr.toLowerCase().equals("false"))
                 return new Symbol(TokenConstants.BOOL_CONST, false);
-            return new Symbol(TokenConstants.OBJECTID, AbstractTable.idtable.addString(objectStr));
+            else if (objectStr.charAt(0) <= 'z' && objectStr.charAt(0) >= 'a')
+                return new Symbol(TokenConstants.OBJECTID, AbstractTable.idtable.addString(objectStr));
+            return new Symbol(TokenConstants.TYPEID, AbstractTable.idtable.addString(objectStr));
             }
 
-<YYINITIAL> {TYPE_ID}  { return new Symbol(TokenConstants.TYPEID, AbstractTable.idtable.addString(yytext()))}
+
+<YYINITIAL> {OP_STRING} {
+                yybegin(STRING);
+            }
+
+<STRING>    {CL_STRING} { 
+                yybegin(YYINITIAL);
+            }
+
+<STRING>    {STRING_CONST} {
+                String str = yytext(); 
+                return new Symbol(TokenConstants.STR_CONST, AbstractTable.stringtable.addString(str));
+            } 
+
+<YYINITIAL> {DIGIT} {
+                return new Symbol(TokenConstants.INT_CONST, AbstractTable.inttable.addString(yytext()));
+            }
+
+<YYINITIAL, COMMENT> {OP_COMMENT} {
+                comment_depth ++;
+                yybegin(COMMENT);
+            }
+
+<COMMENT>   {CL_COMMENT} {
+                comment_depth --;
+                if (comment_depth == 0)
+                    yybegin(YYINITIAL);
+            }
+
+<COMMENT>   .  { }
 
 .   {
         String errMsg = "LEXER BUG - UNMATCHED file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
