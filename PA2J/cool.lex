@@ -73,20 +73,45 @@ import java_cup.runtime.Symbol;
 
 DIGIT = [0-9]+
 ALPHA = [a-zA-Z]+
+
+OBJECT_ID = [a-z]({DIGIT}|{ALPHA}|_)+
+TYPE_ID = [A-Z]({DIGIT}|{ALPHA}|_)+
+
 WHITE_SPACE = [\t\b\ ]
-NEWLINE = [\n]
+NEWLINE = [\r\n]
 
 COMMENT_LINE = [\-][\-][^{NEWLINE}]*{NEWLINE}
 OP_COMMENT = "(*"
 CL_COMMENT = "*)"
+%state COMMENT
 
 OP_STRING  = [\"]
 CL_STRING  = [\"]
-
-%state COMMENT
 %state STRING
 
 %%
+
+<YYINITIAL>"class" { return new Symbol(TokenConstants.CLASS); }
+<YYINITIAL>"else" { return new Symbol(TokenConstants.ELSE); }
+<YYINITIAL>"fi" { return new Symbol(TokenConstants.FI); }
+<YYINITIAL>"if" { return new Symbol(TokenConstants.IF); }
+<YYINITIAL>"in" { return new Symbol(TokenConstants.IN); }
+<YYINITIAL>"inherits" { return new Symbol(TokenConstants.INHERITS); }
+<YYINITIAL>"isvoid" { return new Symbol(TokenConstants.ISVOID); }
+<YYINITIAL>"let" { return new Symbol(TokenConstants.LET); }
+<YYINITIAL>"loop" { return new Symbol(TokenConstants.LOOP); }
+<YYINITIAL>"pool" { return new Symbol(TokenConstants.POOL); }
+<YYINITIAL>"then" { return new Symbol(TokenConstants.THEN); }
+<YYINITIAL>"while" { return new Symbol(TokenConstants.WHILE); }
+<YYINITIAL>"case" { return new Symbol(TokenConstants.CASE); }
+<YYINITIAL>"esac" { return new Symbol(TokenConstants.ESAC); }
+<YYINITIAL>"new" { return new Symbol(TokenConstants.NEW); }
+<YYINITIAL>"of" { return new Symbol(TokenConstants.OF); }
+<YYINITIAL>"not" { return new Symbol(TokenConstants.NOT); }
+<YYINITIAL>({WHITE_SPACE}|{NEWLINE})+ { }
+<YYINITIAL> "{" { return new Symbol(TokenConstants.LBRACE); }
+<YYINITIAL> "}" { return new Symbol(TokenConstants.RBRACE); }
+
 
 <YYINITIAL>"=>"			{ /* Sample lexical rule for "=>" arrow.
                                      Further lexical rules should be defined
@@ -100,3 +125,6 @@ CL_STRING  = [\"]
                                   System.err.println("LEXER BUG - UNMATCHED: " + yytext()); 
                                   return new Symbol(TokenConstants.ERROR, "LEXER BUG - UNMATCHED @" + yyline + ":" +  yytext());
                                 }
+
+<YYINITIAL> {OBJECT_ID} { }
+<YYINITIAL> {TYPE_ID}  { }
