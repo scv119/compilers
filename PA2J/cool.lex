@@ -108,22 +108,19 @@ CL_STRING  = [\"]
 <YYINITIAL>"new" { return new Symbol(TokenConstants.NEW); }
 <YYINITIAL>"of" { return new Symbol(TokenConstants.OF); }
 <YYINITIAL>"not" { return new Symbol(TokenConstants.NOT); }
+
 <YYINITIAL>({WHITE_SPACE}|{NEWLINE})+ { }
-<YYINITIAL> "{" { return new Symbol(TokenConstants.LBRACE); }
-<YYINITIAL> "}" { return new Symbol(TokenConstants.RBRACE); }
-
-
-<YYINITIAL>"=>"			{ /* Sample lexical rule for "=>" arrow.
-                                     Further lexical rules should be defined
-                                     here, after the last %% separator */
-                                  return new Symbol(TokenConstants.DARROW); }
+<YYINITIAL>"{" { return new Symbol(TokenConstants.LBRACE); }
+<YYINITIAL>"}" { return new Symbol(TokenConstants.RBRACE); }
+<YYINITIAL>"=>" { return new Symbol(TokenConstants.DARROW); }
 
 .                               { /* This rule should be the very last
                                      in your lexical specification and
                                      will match match everything not
                                      matched by other lexical rules. */
-                                  System.err.println("LEXER BUG - UNMATCHED: " + yytext()); 
-                                  return new Symbol(TokenConstants.ERROR, "LEXER BUG - UNMATCHED @" + yyline + ":" +  yytext());
+                                  String errMsg = "LEXER BUG - UNMATCHED file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
+                                  System.err.println(errMsg);
+                                  return new Symbol(TokenConstants.ERROR, errMsg);
                                 }
 
 <YYINITIAL> {OBJECT_ID} { }
