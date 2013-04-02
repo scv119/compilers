@@ -22,6 +22,7 @@ import java_cup.runtime.Symbol;
     private int curr_lineno = 1;
     private int comment_depth = 0;
     private String errMsg = null;
+    private boolean strError = false; 
     int get_curr_lineno() {
 	return curr_lineno;
     }
@@ -55,18 +56,22 @@ import java_cup.runtime.Symbol;
  *  Ultimately, you should return the EOF symbol, or your lexer won't
  *  work.  */
     String errMsg = null;
-/*    switch(yy_lexical_state) {
+    switch(yy_lexical_state) {
     case YYINITIAL:
 	    break;
     case COMMENT:
+        yybegin(EOF);
         errMsg = "LEXER BUG - EOF in comment, file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
         System.err.println(errMsg);
-        return new Symbol(TokenConstants.ERROR, errMsg);
+        return new Symbol(TokenConstants.ERROR, "EOF in comment");
     case STRING:
+        yybegin(EOF);
         errMsg = "LEXER BUG - EOF in string, file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
         System.err.println(errMsg);
-        return new Symbol(TokenConstants.ERROR, errMsg);
-    } */
+        return new Symbol(TokenConstants.ERROR, "EOF in string constant");
+    default:
+        break;
+    }
     return new Symbol(TokenConstants.EOF);
 %eofval}
 
@@ -76,23 +81,24 @@ import java_cup.runtime.Symbol;
 %ignorecase
 
 DIGIT = [0-9]+
-ALPHA = [a-zA-Z]+
+ALPHA = [a-z]+
 
 ID = [a-z]({DIGIT}|{ALPHA}|_)*
 
-WHITE_SPACE = [\f\v\t\r\ ]
-NEWLINE = [\n]
+WHITE_SPACE = [\b\f\v\t\ \x0b]
+NEWLINE = [\r\n]
 
 COMMENT_LINE = [-][-][^\n]*{NEWLINE}
 OP_COMMENT = "(*"
 CL_COMMENT = "*)"
 %state COMMENT
 
-STRING_CONST = [^\"^\n^\\]*
+STRING_CONST = [^\"^\n^\\^\0]*
 OP_STRING  = [\"]
 CL_STRING  = [\"]
 %state STRING
 %state STRING_BACK_SLASH
+%state EOF
 
 %%
 
@@ -134,13 +140,16 @@ CL_STRING  = [\"]
 <YYINITIAL>"@" { return new Symbol(TokenConstants.AT); }
 <YYINITIAL>"=>" { return new Symbol(TokenConstants.DARROW); }
 
-<YYINITIAL, COMMENT>({WHITE_SPACE}|{NEWLINE})+ { }
+<YYINITIAL, COMMENT> {WHITE_SPACE} { }
+<YYINITIAL, COMMENT> {NEWLINE} {
+                curr_lineno ++;
+            }
 
 <YYINITIAL> {ID} { 
             String objectStr = yytext(); 
-            if (objectStr.toLowerCase().equals("true"))
+            if (objectStr.charAt(0) == 't' && objectStr.toLowerCase().equals("true"))
                 return new Symbol(TokenConstants.BOOL_CONST, true);
-            else if (objectStr.toLowerCase().equals("false"))
+            else if (objectStr.charAt(0) == 'f' && objectStr.toLowerCase().equals("false"))
                 return new Symbol(TokenConstants.BOOL_CONST, false);
             else if (objectStr.charAt(0) <= 'z' && objectStr.charAt(0) >= 'a')
                 return new Symbol(TokenConstants.OBJECTID, AbstractTable.idtable.addString(objectStr));
@@ -149,6 +158,7 @@ CL_STRING  = [\"]
 
 
 <YYINITIAL> {OP_STRING} {
+                strError = false;
                 yybegin(STRING);
             }
 
@@ -156,7 +166,7 @@ CL_STRING  = [\"]
                 yybegin(STRING_BACK_SLASH); 
             }
 
-<STRING_BACK_SLASH> . {
+<STRING_BACK_SLASH> ([^\0]) {
                 char c = yytext().charAt(0);
                 switch (c) {
                     case 'b':
@@ -171,8 +181,8 @@ CL_STRING  = [\"]
                     case 'f':
                         c= '\f';
                         break;
-                    case '0':
-                        c= '\0';
+                    case '\n':
+                        curr_lineno ++;
                         break;
                     default:
                         break;
@@ -186,14 +196,21 @@ CL_STRING  = [\"]
                 yybegin(YYINITIAL);
                 String str = string_buf.toString();
                 string_buf = new StringBuffer();
-                if (str.length()  > MAX_STR_CONST) {
-                    return new Symbol(TokenConstants.ERROR, "String constant too long");
-                }
+                if (strError)
+                    return new Symbol(TokenConstants.ERROR, "Invalid character");
+                if (str.length()  > MAX_STR_CONST)
+                    return new Symbol(TokenConstants.ERROR, "EOF in string constant");
                 return new Symbol(TokenConstants.STR_CONST, AbstractTable.stringtable.addString(str));
             }
 
-<STRING, STRING_BACK_SLASH> {NEWLINE} {
+<STRING, STRING_BACK_SLASH> [\0] {
+                strError = true;
+                yybegin(STRING);
+            }
+
+<STRING> {NEWLINE} {
                 yybegin(YYINITIAL);
+                curr_lineno ++;
                 string_buf = new StringBuffer();
                 return new Symbol(TokenConstants.ERROR, "Unterminated string constant");
             }
@@ -207,7 +224,9 @@ CL_STRING  = [\"]
                 return new Symbol(TokenConstants.INT_CONST, AbstractTable.inttable.addString(yytext()));
             }
 
-<YYINITIAL> {COMMENT_LINE} {}
+<YYINITIAL> {COMMENT_LINE} { curr_lineno ++; }
+
+<YYINITIAL> {CL_COMMENT}  { return new Symbol(TokenConstants.ERROR, "Unmatched *)"); }
 
 <YYINITIAL,COMMENT> {OP_COMMENT} {
                 comment_depth ++;
@@ -221,6 +240,10 @@ CL_STRING  = [\"]
             }
 
 <COMMENT>   .  { }
+
+<EOF> .* { 
+    return new Symbol(TokenConstants.EOF);
+    }
 
 .   {
         errMsg = "LEXER BUG - UNMATCHED file\n \"" + curr_filename() + "\", line " + yyline + ": " +  yytext();
